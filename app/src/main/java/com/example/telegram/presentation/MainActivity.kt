@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,6 +51,7 @@ fun TelegramWearApp() {
     var currentIndex by remember { mutableStateOf(0) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var lastUpdateId by remember { mutableStateOf(0L) }
     val scope = rememberCoroutineScope()
 
     fun fetchMessages() {
@@ -60,16 +60,24 @@ fun TelegramWearApp() {
             error = ""
             try {
                 val result = withContext(Dispatchers.IO) {
-                    val url = "https://api.telegram.org/bot$BOT_TOKEN/getUpdates?limit=100&offset=-100"
+                    // offset parametresini kullanarak yeni mesajları al
+                    val offset = if (lastUpdateId > 0) lastUpdateId + 1 else 0
+                    val url = "https://api.telegram.org/bot$BOT_TOKEN/getUpdates?limit=100&offset=$offset"
                     val response = URL(url).readText()
                     val json = JSONObject(response)
 
                     if (json.getBoolean("ok")) {
                         val updates = json.getJSONArray("result")
-                        val messageList = mutableListOf<TelegramMessage>()
+                        val newMessageList = mutableListOf<TelegramMessage>()
+                        var maxUpdateId = lastUpdateId
 
                         for (i in 0 until updates.length()) {
                             val update = updates.getJSONObject(i)
+                            val updateId = update.getLong("update_id")
+                            if (updateId > maxUpdateId) {
+                                maxUpdateId = updateId
+                            }
+
                             if (update.has("message")) {
                                 val message = update.getJSONObject("message")
                                 val chat = message.getJSONObject("chat")
@@ -81,9 +89,9 @@ fun TelegramWearApp() {
                                     val date = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
                                         .format(Date(timestamp * 1000))
 
-                                    messageList.add(
+                                    newMessageList.add(
                                         TelegramMessage(
-                                            id = update.getLong("update_id"),
+                                            id = updateId,
                                             text = message.optString("text", "[Metin yok]"),
                                             from = from.optString("first_name", "Bilinmeyen"),
                                             date = date,
@@ -93,18 +101,29 @@ fun TelegramWearApp() {
                                 }
                             }
                         }
-                        // En yeni mesaj en sonda olsun diye ters çevirmiyoruz
-                        messageList
+
+                        // Mevcut mesajlarla yeni mesajları birleştir ve sırala
+                        val allMessages = (messages + newMessageList)
+                            .distinctBy { it.id }
+                            .sortedBy { it.timestamp }
+                        allMessages
                     } else {
-                        emptyList()
+                        messages
                     }
                 }
 
+                val previousSize = messages.size
                 messages = result
-                // İlk açılışta en yeni mesajı göster (en son index)
-                if (messages.isNotEmpty() && currentIndex == 0) {
+
+                // İlk açılışta en yeni mesajı göster
+                if (previousSize == 0 && messages.isNotEmpty()) {
                     currentIndex = messages.size - 1
                 }
+                // Yeni mesaj geldiyse otomatik en yeniye geç
+                else if (messages.size > previousSize) {
+                    currentIndex = messages.size - 1
+                }
+                // Index kontrolü
                 if (currentIndex >= messages.size) {
                     currentIndex = if (messages.isNotEmpty()) messages.size - 1 else 0
                 }
@@ -315,23 +334,3 @@ fun MessageViewerScreen(
     }
 }
 
-@Composable
-fun CompactButton(
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .size(32.dp)
-            .padding(2.dp),
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            backgroundColor = MaterialTheme.colors.surface,
-            disabledBackgroundColor = MaterialTheme.colors.surface.copy(alpha = 0.3f)
-        )
-    ) {
-        content()
-    }
-}
