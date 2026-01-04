@@ -23,6 +23,7 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
 
+
 // BOT TOKEN VE CHAT ID'YI BURAYA GİRİN
 private const val BOT_TOKEN = "7728309315:AAHVGbC8zNMGK3Qd5xXb9r5j5w0Qbt-PWus"
 private const val TARGET_CHAT_ID = "5943374104"
@@ -48,10 +49,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TelegramWearApp() {
     var messages by remember { mutableStateOf<List<TelegramMessage>>(emptyList()) }
-    var currentIndex by remember { mutableStateOf(0) }
+    var currentIndex by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
-    var lastUpdateId by remember { mutableStateOf(0L) }
+    var lastUpdateId by remember { mutableLongStateOf(0L) }
     val scope = rememberCoroutineScope()
 
     fun fetchMessages() {
